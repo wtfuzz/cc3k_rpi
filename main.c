@@ -55,9 +55,6 @@ void _spi(uint8_t *out, uint8_t *in, uint16_t length, int async)
 {
   int i;
 
-  while(1)
-  {
-
   fprintf(stderr, "SPI %d\n", length);
 
   bcm2835_spi_transfernb(out, in, length);
@@ -69,9 +66,6 @@ void _spi(uint8_t *out, uint8_t *in, uint16_t length, int async)
   for(i=0;i<length;i++)
     fprintf(stderr, "%02X ", in[i]);
   fprintf(stderr, "\n");
-
-  usleep(100000);
-  }
 
   cc3k_spi_done(&driver);
 }
@@ -106,7 +100,7 @@ int setup_spi()
   pinMode(EN_PIN, OUTPUT);
   pinMode(IRQ_PIN, INPUT);
 
-  //wiringPiISR(IRQ_PIN, INT_EDGE_FALLING, _isr);
+  wiringPiISR(IRQ_PIN, INT_EDGE_FALLING, _isr);
 
   bcm2835_spi_begin();
   bcm2835_spi_setBitOrder(BCM2835_SPI_BIT_ORDER_MSBFIRST);
