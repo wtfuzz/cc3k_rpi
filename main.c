@@ -1,12 +1,18 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <time.h>
 
 #include <bcm2835.h>
 
 #include <wiringPi.h>
 
 #include <cc3k.h>
+
+#define LOG(format, ...) { \
+    fprintf(stderr, "[%lf] func:%s file:%s:%d] " format, time_now(), __func__, __FILE__, __LINE__, ##__VA_ARGS__); \
+    fflush(stderr); \
+  }
 
 // CS, EN, IRQ
 // 17, 27, 22  (BCM Pins)
@@ -18,6 +24,17 @@
 cc3k_t driver;
 cc3k_config_t config;
 
+int int_en = 0;
+int int_pending = 0;
+
+double time_now()
+{
+  struct timespec ts;
+  clock_gettime(CLOCK_MONOTONIC, &ts);
+
+  return ((double)(ts).tv_sec + ((double)(ts).tv_nsec * 1e-9));
+}
+
 void _delay(uint32_t us)
 {
   usleep(us);
@@ -25,7 +42,7 @@ void _delay(uint32_t us)
 
 void _enable(int enable)
 {
-  fprintf(stderr, "Chip enable %d\n", enable);
+  LOG("Chip enable %d\n", enable);
   if(enable)
     digitalWrite(EN_PIN, HIGH);
   else
@@ -39,12 +56,16 @@ int _read_int()
 
 void _enable_int(int enable)
 {
-  fprintf(stderr, "Int enable %d\n", enable);  
+  LOG("Int enable %d\n", enable);  
+  int_en = enable;
+
+  if(enable && int_pending)
+    cc3k_interrupt(&driver);
 }
 
 void _assert_cs(int assert)
 {
-  fprintf(stderr, "CS assert %d\n", assert);
+  LOG("CS assert %d\n", assert);
   if(assert)
     digitalWrite(CS_PIN, LOW);
   else
@@ -55,7 +76,7 @@ void _spi(uint8_t *out, uint8_t *in, uint16_t length, int async)
 {
   int i;
 
-  fprintf(stderr, "SPI %d\n", length);
+  LOG("SPI %d\n", length);
 
   bcm2835_spi_transfernb(out, in, length);
   
@@ -72,7 +93,12 @@ void _spi(uint8_t *out, uint8_t *in, uint16_t length, int async)
 
 void _transition(cc3k_state_t from, cc3k_state_t to)
 {
-  fprintf(stderr, "Transition %d -> %d\n", from, to);
+  LOG("Transition %d -> %d\n", from, to);
+}
+
+void _command(uint16_t opcode, uint8_t *data, uint16_t length)
+{
+  LOG("Command %d\n", opcode);
 }
 
 void setup_driver()
@@ -84,12 +110,23 @@ void setup_driver()
   config.assertChipSelect = _assert_cs;
   config.spiTransaction = _spi;
   config.transitionCallback = _transition;
+  config.commandCallback = _command;
 }
 
 void _isr(void)
 {
-  fprintf(stderr, "Interrupt!\n");
-  cc3k_interrupt(&driver);
+  
+  if(int_en)
+  {
+    LOG("Interrupt!\n");
+    cc3k_interrupt(&driver);
+  }
+  else
+  {
+    LOG("MASKED Interrupt!\n");
+    int_pending = 1;
+  }
+    
 }
 
 int setup_spi()
@@ -105,7 +142,7 @@ int setup_spi()
   bcm2835_spi_begin();
   bcm2835_spi_setBitOrder(BCM2835_SPI_BIT_ORDER_MSBFIRST);
   bcm2835_spi_setDataMode(BCM2835_SPI_MODE1);
-  bcm2835_spi_setClockDivider(BCM2835_SPI_CLOCK_DIVIDER_64);
+  bcm2835_spi_setClockDivider(BCM2835_SPI_CLOCK_DIVIDER_128);
   bcm2835_spi_chipSelect(BCM2835_SPI_CS0);
   bcm2835_spi_setChipSelectPolarity(BCM2835_SPI_CS0, LOW);
 
