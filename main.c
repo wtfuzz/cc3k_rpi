@@ -18,9 +18,9 @@
 // 17, 27, 22  (BCM Pins)
 // 0, 2, 3
 #define CS_PIN 0
-//#define EN_PIN 2
+#define EN_PIN 2
 //#define CS_PIN 17
-#define EN_PIN 27
+//#define EN_PIN 27
 #define IRQ_PIN 3
 
 cc3k_t driver;
@@ -49,10 +49,16 @@ void _delay(uint32_t us)
 void _enable(int enable)
 {
   LOG("Chip enable %d\n", enable);
+/*
   if(enable)
     bcm2835_gpio_set(EN_PIN);
   else
     bcm2835_gpio_clr(EN_PIN);
+*/
+  if(enable)
+    digitalWrite(EN_PIN, HIGH);
+  else
+    digitalWrite(EN_PIN, LOW);
 }
 
 int _read_int()
@@ -96,7 +102,6 @@ void _spi(uint8_t *out, uint8_t *in, uint16_t length, int async)
   //bcm2835_spi_transfernb(out, in, length);
   spi_transfer(out, in, length);
  
-/* 
   for(i=0;i<length;i++)
     fprintf(stderr, "%02X ", out[i]);
   fprintf(stderr, "\n");
@@ -104,7 +109,6 @@ void _spi(uint8_t *out, uint8_t *in, uint16_t length, int async)
   for(i=0;i<length;i++)
     fprintf(stderr, "%02X ", in[i]);
   fprintf(stderr, "\n");
-*/
 
   // The SPI transaction on the pi is synchronous, so notifiy the cc3k driver we are done
   cc3k_spi_done(&driver);
