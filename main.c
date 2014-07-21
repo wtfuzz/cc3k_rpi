@@ -2,18 +2,13 @@
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
+#include <pthread.h>
 
 #include <bcm2835.h>
 
 #include <wiringPi.h>
 
 #include <cc3k.h>
-
-/*
-#define LOG(format, ...) { \
-    fprintf(stderr, "[%lf] func:%s file:%s:%d] " format, time_now(), __func__, __FILE__, __LINE__, ##__VA_ARGS__); \
-  }
-*/
 
 #define LOG(format, ...) { \
     fprintf(stderr, "[%lf] " format, time_now(), ##__VA_ARGS__); \
@@ -31,8 +26,12 @@
 cc3k_t driver;
 cc3k_config_t config;
 
+cc3k_socket_t client;
+
 int int_en = 0;
-int int_pending = 0;
+volatile int int_pending = 0;
+
+pthread_mutex_t lock;
 
 double time_now()
 {
@@ -118,12 +117,12 @@ void _transition(cc3k_state_t from, cc3k_state_t to)
 
 void _command(uint16_t opcode, uint8_t *data, uint16_t length)
 {
-  LOG("Command 0x%04X\n", opcode);
+  //LOG("Command 0x%04X\n", opcode);
 }
 
 void _event(uint16_t opcode, uint8_t *data, uint16_t length)
 {
-  LOG("Event 0x%04X\n", opcode);
+  //LOG("Event 0x%04X\n", opcode);
 }
 
 void setup_driver()
@@ -141,7 +140,8 @@ void setup_driver()
 
 void _isr(void)
 {
-  
+ 
+  pthread_mutex_lock(&lock); 
   if(int_en)
   {
     //LOG("Interrupt!\n");
@@ -152,6 +152,7 @@ void _isr(void)
     LOG("MASKED Interrupt!\n");
     //int_pending = 1;
   }
+  pthread_mutex_unlock(&lock);
     
 }
 
@@ -177,10 +178,28 @@ int setup_spi()
   return 0;
 }
 
+int setup_client()
+{
+  // Setup the client socket
+  bzero(&client, sizeof(cc3k_socket_t));
+  client.family = AF_INET;
+  client.type = SOCK_STREAM;
+  client.protocol = IPPROTO_TCP;
+
+  client.sockaddr.family = AF_INET;
+  client.sockaddr.port = 0xAAAA; // Port 43690
+  // 10.78.100.173
+  client.sockaddr.addr = 0xAD644E0A;
+
+  cc3k_socket_add(&driver, &client);
+}
+
 int main(int argc, char **argv)
 {
   uint32_t ms = 0;
   int init_done = 0;
+
+  pthread_mutex_init(&lock, NULL);
 
   wiringPiSetup();
 
@@ -201,10 +220,13 @@ int main(int argc, char **argv)
   setup_driver();
 
   cc3k_init(&driver, &config);
+  setup_client();
 
   while(1)
   {
+    pthread_mutex_lock(&lock);
     cc3k_loop(&driver, ms);
+    pthread_mutex_unlock(&lock);
 
     if(driver.dhcp_complete == 1 && init_done == 0)
     {

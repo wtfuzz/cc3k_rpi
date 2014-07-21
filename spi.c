@@ -40,7 +40,7 @@ int SpiOpenPort (void)
     spi_bitsPerWord = 8;
     
     //----- SET SPI BUS SPEED -----
-    spi_speed = 1000000;    //1000000 = 1MHz (1uS per bit) 
+    spi_speed = 8000000;    //1000000 = 1MHz (1uS per bit) 
 
 
     spi_cs_fd = &spi_cs0_fd;
