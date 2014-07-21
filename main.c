@@ -9,17 +9,22 @@
 
 #include <cc3k.h>
 
+/*
 #define LOG(format, ...) { \
     fprintf(stderr, "[%lf] func:%s file:%s:%d] " format, time_now(), __func__, __FILE__, __LINE__, ##__VA_ARGS__); \
-    fflush(stderr); \
+  }
+*/
+
+#define LOG(format, ...) { \
+    fprintf(stderr, "[%lf] " format, time_now(), ##__VA_ARGS__); \
   }
 
 // CS, EN, IRQ
 // 17, 27, 22  (BCM Pins)
 // 0, 2, 3
-//#define CS_PIN 0
+#define CS_PIN 0
 //#define EN_PIN 2
-#define CS_PIN 17
+//#define CS_PIN 17
 #define EN_PIN 27
 #define IRQ_PIN 3
 
@@ -58,7 +63,7 @@ int _read_int()
 
 void _enable_int(int enable)
 {
-  LOG("Int enable %d\n", enable);  
+  //LOG("Int enable %d\n", enable);  
   int_en = enable;
 
   if(enable && int_pending)
@@ -72,9 +77,15 @@ void _assert_cs(int assert)
 {
   //LOG("CS assert %d\n", assert);
   if(assert)
+    digitalWrite(CS_PIN, LOW);
+  else
+    digitalWrite(CS_PIN, HIGH);
+/*
+  if(assert)
     bcm2835_gpio_clr(CS_PIN);
   else
     bcm2835_gpio_set(CS_PIN);
+*/
 }
 
 void _spi(uint8_t *out, uint8_t *in, uint16_t length, int async)
@@ -85,7 +96,8 @@ void _spi(uint8_t *out, uint8_t *in, uint16_t length, int async)
 
   //bcm2835_spi_transfernb(out, in, length);
   spi_transfer(out, in, length);
-  
+ 
+/* 
   for(i=0;i<length;i++)
     fprintf(stderr, "%02X ", out[i]);
   fprintf(stderr, "\n");
@@ -93,6 +105,7 @@ void _spi(uint8_t *out, uint8_t *in, uint16_t length, int async)
   for(i=0;i<length;i++)
     fprintf(stderr, "%02X ", in[i]);
   fprintf(stderr, "\n");
+*/
 
   // The SPI transaction on the pi is synchronous, so notifiy the cc3k driver we are done
   cc3k_spi_done(&driver);
@@ -100,12 +113,17 @@ void _spi(uint8_t *out, uint8_t *in, uint16_t length, int async)
 
 void _transition(cc3k_state_t from, cc3k_state_t to)
 {
-  LOG("Transition %d -> %d\n", from, to);
+  //LOG("Transition %d -> %d\n", from, to);
 }
 
 void _command(uint16_t opcode, uint8_t *data, uint16_t length)
 {
-  LOG("Command %d\n", opcode);
+  LOG("Command 0x%04X\n", opcode);
+}
+
+void _event(uint16_t opcode, uint8_t *data, uint16_t length)
+{
+  LOG("Event 0x%04X\n", opcode);
 }
 
 void setup_driver()
@@ -118,6 +136,7 @@ void setup_driver()
   config.spiTransaction = _spi;
   config.transitionCallback = _transition;
   config.commandCallback = _command;
+  config.eventCallback = _event;
 }
 
 void _isr(void)
@@ -138,8 +157,6 @@ void _isr(void)
 
 int setup_spi()
 {
-  int fd;
-
   pinMode(CS_PIN, OUTPUT);
   pinMode(EN_PIN, OUTPUT);
   pinMode(IRQ_PIN, INPUT);
@@ -157,12 +174,14 @@ int setup_spi()
 */
   //bcm2835_spi_setChipSelectPolarity(BCM2835_SPI_CS0, LOW);
 
-  return fd;
+  return 0;
 }
 
 int main(int argc, char **argv)
 {
   uint32_t ms = 0;
+  int init_done = 0;
+
   wiringPiSetup();
 
   if (!bcm2835_init())
@@ -177,6 +196,8 @@ int main(int argc, char **argv)
     return EXIT_FAILURE;
   }
 
+  piHiPri(99);
+
   setup_driver();
 
   cc3k_init(&driver, &config);
@@ -184,6 +205,20 @@ int main(int argc, char **argv)
   while(1)
   {
     cc3k_loop(&driver, ms);
+
+    if(driver.dhcp_complete == 1 && init_done == 0)
+    {
+      uint8_t *a;
+      LOG("Got DHCP\n");
+
+      a = (uint8_t *)&driver.ipconfig.ip;
+      LOG("IP Address: %d.%d.%d.%d\n",
+        a[3], a[2], a[1], a[0]
+        );
+
+      init_done = 1;
+    }
+
     usleep(1000);
     ms++;
   }

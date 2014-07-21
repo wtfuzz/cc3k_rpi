@@ -124,36 +124,22 @@ int SpiClosePort (int spi_device)
     return(status_value);
 }
 
-
-
-//*******************************************
-//*******************************************
-//********** SPI WRITE & READ DATA **********
-//*******************************************
-//*******************************************
-//data    Bytes to write.  Contents is overwritten with bytes read.
-//int SpiWriteAndRead (int spi_device, unsigned char *data, int length)
 int spi_transfer(uint8_t *out, uint8_t *in, uint16_t length)
 {
-  //struct spi_ioc_transfer spi[length];
   struct spi_ioc_transfer spi;
   int i = 0;
   int retVal = -1;
   int *spi_cs_fd;
 
-  spi_cs_fd = &spi_cs0_fd;
-
-  //one spi transfer for each byte
-
-  spi.tx_buf        = (unsigned char *)out; // transmit from "data"
-  spi.rx_buf        = (unsigned char *)in; // receive into "data"
+  spi.tx_buf        = (void *)out; // transmit from "data"
+  spi.rx_buf        = (void *)in; // receive into "data"
   spi.len           = length ;
   spi.delay_usecs   = 0 ;
   spi.speed_hz      = spi_speed ;
   spi.bits_per_word = spi_bitsPerWord ;
-  spi.cs_change = 0;
+  spi.cs_change = 1;
 
-  retVal = ioctl(*spi_cs_fd, SPI_IOC_MESSAGE(1), &spi) ;
+  retVal = ioctl(spi_cs0_fd, SPI_IOC_MESSAGE(1), &spi) ;
 
   if(retVal < 0)
   {
