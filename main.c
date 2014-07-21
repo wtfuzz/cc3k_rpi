@@ -17,8 +17,10 @@
 // CS, EN, IRQ
 // 17, 27, 22  (BCM Pins)
 // 0, 2, 3
-#define CS_PIN 0
-#define EN_PIN 2
+//#define CS_PIN 0
+//#define EN_PIN 2
+#define CS_PIN 17
+#define EN_PIN 27
 #define IRQ_PIN 3
 
 cc3k_t driver;
@@ -44,9 +46,9 @@ void _enable(int enable)
 {
   LOG("Chip enable %d\n", enable);
   if(enable)
-    digitalWrite(EN_PIN, HIGH);
+    bcm2835_gpio_set(EN_PIN);
   else
-    digitalWrite(EN_PIN, LOW);
+    bcm2835_gpio_clr(EN_PIN);
 }
 
 int _read_int()
@@ -60,25 +62,29 @@ void _enable_int(int enable)
   int_en = enable;
 
   if(enable && int_pending)
+  {
     cc3k_interrupt(&driver);
+    int_pending = 0;
+  }
 }
 
 void _assert_cs(int assert)
 {
-  LOG("CS assert %d\n", assert);
+  //LOG("CS assert %d\n", assert);
   if(assert)
-    digitalWrite(CS_PIN, LOW);
+    bcm2835_gpio_clr(CS_PIN);
   else
-    digitalWrite(CS_PIN, HIGH);
+    bcm2835_gpio_set(CS_PIN);
 }
 
 void _spi(uint8_t *out, uint8_t *in, uint16_t length, int async)
 {
   int i;
 
-  LOG("SPI %d\n", length);
+  //LOG("SPI %d\n", length);
 
-  bcm2835_spi_transfernb(out, in, length);
+  //bcm2835_spi_transfernb(out, in, length);
+  spi_transfer(out, in, length);
   
   for(i=0;i<length;i++)
     fprintf(stderr, "%02X ", out[i]);
@@ -88,6 +94,7 @@ void _spi(uint8_t *out, uint8_t *in, uint16_t length, int async)
     fprintf(stderr, "%02X ", in[i]);
   fprintf(stderr, "\n");
 
+  // The SPI transaction on the pi is synchronous, so notifiy the cc3k driver we are done
   cc3k_spi_done(&driver);
 }
 
@@ -118,13 +125,13 @@ void _isr(void)
   
   if(int_en)
   {
-    LOG("Interrupt!\n");
+    //LOG("Interrupt!\n");
     cc3k_interrupt(&driver);
   }
   else
   {
     LOG("MASKED Interrupt!\n");
-    int_pending = 1;
+    //int_pending = 1;
   }
     
 }
@@ -139,12 +146,16 @@ int setup_spi()
 
   wiringPiISR(IRQ_PIN, INT_EDGE_FALLING, _isr);
 
+  SpiOpenPort();
+
+/*
   bcm2835_spi_begin();
   bcm2835_spi_setBitOrder(BCM2835_SPI_BIT_ORDER_MSBFIRST);
   bcm2835_spi_setDataMode(BCM2835_SPI_MODE1);
-  bcm2835_spi_setClockDivider(BCM2835_SPI_CLOCK_DIVIDER_128);
-  bcm2835_spi_chipSelect(BCM2835_SPI_CS0);
-  bcm2835_spi_setChipSelectPolarity(BCM2835_SPI_CS0, LOW);
+  bcm2835_spi_setClockDivider(BCM2835_SPI_CLOCK_DIVIDER_512);
+  bcm2835_spi_chipSelect(BCM2835_SPI_CS_NONE);
+*/
+  //bcm2835_spi_setChipSelectPolarity(BCM2835_SPI_CS0, LOW);
 
   return fd;
 }
